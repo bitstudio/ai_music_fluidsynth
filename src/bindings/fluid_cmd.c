@@ -606,6 +606,60 @@ fluid_usershell(fluid_settings_t *settings, fluid_cmd_handler_t *handler)
     fluid_shell_run(&shell);
 }
 
+static fluid_thread_return_t
+fluid_shell_run_cmd_string(void * data, char * cmd_string){
+    fluid_shell_t *shell = (fluid_shell_t *)data;
+
+    char *sub_cmd_buff;
+    sub_cmd_buff = (char *)malloc(1024 * sizeof(char));
+    int index = 1;
+    int start_index = 1;
+    int errors = FALSE;
+
+    while(1 && index < 1024){
+
+        if (cmd_string[index] == '\''){
+            cmd_string[index] = '"';
+        }
+        
+        if ( cmd_string[index] == ',' || cmd_string[index] == '\0'){
+            
+            memcpy(sub_cmd_buff, &cmd_string[start_index], index - start_index);
+            sub_cmd_buff[index - start_index] = '\0';
+
+            /* handle the command */
+            switch(fluid_command(shell->handler, sub_cmd_buff, shell->out))
+            {
+
+            case 1: /* empty line or comment */
+                break;
+
+            case FLUID_FAILED: /* erroneous command */
+                errors = TRUE;
+
+            case FLUID_OK: /* valid command */
+                break;
+
+            case -2: /* quit */
+                break;
+            }
+
+            start_index = index + 1;
+        }
+
+        if ( cmd_string[index] == '\0' ){
+            break;
+        }
+
+        index++;
+    }
+
+    free(sub_cmd_buff);
+
+    /* return FLUID_THREAD_RETURN_VALUE on success, something else on failure */
+    return errors ? (fluid_thread_return_t)(-1) : FLUID_THREAD_RETURN_VALUE;
+}
+
 /**
  * Execute shell commands in a file.
  *
@@ -616,9 +670,16 @@ fluid_usershell(fluid_settings_t *settings, fluid_cmd_handler_t *handler)
 int
 fluid_source(fluid_cmd_handler_t *handler, const char *filename)
 {
-    int file;
     fluid_shell_t shell;
     int result;
+
+    if (filename[0] == '@'){
+        printf("my own command handling");
+        fluid_shell_init(&shell, NULL, handler, NULL, fluid_get_stdout());
+        result = (fluid_shell_run_cmd_string(&shell, filename) == FLUID_THREAD_RETURN_VALUE) ? 0 : -1;
+    }
+    else{
+        int file;
 
 #ifdef WIN32
     file = _open(filename, _O_RDONLY);
@@ -626,19 +687,20 @@ fluid_source(fluid_cmd_handler_t *handler, const char *filename)
     file = open(filename, O_RDONLY);
 #endif
 
-    if(file < 0)
-    {
-        return file;
-    }
+        if(file < 0)
+        {
+            return file;
+        }
 
-    fluid_shell_init(&shell, NULL, handler, file, fluid_get_stdout());
-    result = (fluid_shell_run(&shell) == FLUID_THREAD_RETURN_VALUE) ? 0 : -1;
+        fluid_shell_init(&shell, NULL, handler, file, fluid_get_stdout());
+        result = (fluid_shell_run(&shell) == FLUID_THREAD_RETURN_VALUE) ? 0 : -1;
 
 #ifdef WIN32
     _close(file);
 #else
     close(file);
 #endif
+    }
 
     return result;
 }
