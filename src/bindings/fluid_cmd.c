@@ -612,11 +612,11 @@ fluid_shell_run_cmd_string(void * data, char * cmd_string){
 
     char *sub_cmd_buff;
     sub_cmd_buff = (char *)malloc(1024 * sizeof(char));
-    int index = 1;
-    int start_index = 1;
+    size_t index = 1;
+    size_t start_index = 1;
     int errors = FALSE;
 
-    while(1 && index < 1024){
+    while(1 && index < strlen(cmd_string)){
 
         if (cmd_string[index] == '\''){
             cmd_string[index] = '"';
